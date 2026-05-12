@@ -1,6 +1,4 @@
-# UniFund — Vincent Delivery
-
-This delivery implements the smart contract architecture, treasury/governance contract, and Hardhat deployment/debugging setup for the Blockchain-Based Crowdfunding for University Student Societies project.
+# UniFund
 
 ## Install
 
