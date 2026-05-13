@@ -7,12 +7,22 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
   },
-  "keywords": [],
+  "keywords": [
+    "ethereum",
+    "hardhat",
+    "crowdfunding",
+    "governance",
+    "treasury"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Blockchain-based crowdfunding treasury and governance contract for university student societies.",
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "ethers": "^6.13.5",
