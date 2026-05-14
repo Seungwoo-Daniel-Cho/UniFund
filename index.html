@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniFund | Protocol</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; color: #f8fafc; }
+        .stats-card { background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); border: 1px solid rgba(255,255,255,0.05); }
+        .action-card { background: #0f172a; border: 1px solid rgba(255,255,255,0.05); transition: border 0.3s ease; }
+        .action-card:hover { border-color: #6366f1; }
+        .input-field { background: #020617; border: 1px solid #1e293b; color: white; transition: all 0.2s; }
+        .input-field:focus { border-color: #6366f1; outline: none; box-shadow: 0 0 0 1px #6366f1; }
+        .proposal-item { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body class="antialiased">
+
+    <nav class="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <div class="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-xl">U</div>
+            <div>
+                <h1 class="font-extrabold text-xl tracking-tight">UNIFUND</h1>
+                <p id="societyName" class="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Protocol Offline</p>
+            </div>
+        </div>
+        <button id="connectBtn" class="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-500/20">Connect Wallet</button>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="stats-card p-8 rounded-[2rem]">
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Treasury</span>
+                <div id="balance" class="text-3xl font-extrabold mt-2 italic">0.00 ETH</div>
+            </div>
+            <div class="stats-card p-8 rounded-[2rem]">
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Membership Fee</span>
+                <div id="fee" class="text-3xl font-extrabold mt-2 italic">0.00 ETH</div>
+            </div>
+            <div class="stats-card p-8 rounded-[2rem]">
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Eligible Voters</span>
+                <div id="voters" class="text-3xl font-extrabold mt-2 italic">0</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div class="lg:col-span-4 space-y-6">
+                <div class="action-card p-8 rounded-[2rem]">
+                    <h2 class="text-lg font-bold mb-1">Access Protocol</h2>
+                    <p class="text-slate-400 text-xs mb-8">Participate in governance by securing your membership.</p>
+                    <button onclick="joinMembership()" class="w-full bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-sm transition">Join Society</button>
+                </div>
+
+                <div class="action-card p-8 rounded-[2rem]">
+                    <h2 class="text-lg font-bold mb-6">New Proposal</h2>
+                    <div class="space-y-4">
+                        <input id="propDesc" type="text" placeholder="Description" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
+                        <input id="propCat" type="text" placeholder="Category" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
+                        <input id="propAmount" type="number" step="0.01" placeholder="Amount (ETH)" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
+                        <input id="propRecipient" type="text" placeholder="Recipient Address" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
+                        <button onclick="proposeSpending()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-sm mt-4 transition shadow-lg shadow-indigo-500/10">Submit Proposal</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8">
+                <div class="action-card rounded-[2rem] min-h-[500px]">
+                    <div class="p-8 border-b border-white/5 flex justify-between items-center">
+                        <h2 class="font-bold">Governance Feed</h2>
+                        <div class="flex items-center gap-2">
+                            <span class="h-2 w-2 bg-indigo-500 rounded-full animate-pulse"></span>
+                            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Network Live</span>
+                        </div>
+                    </div>
+                    <div id="proposalsList" class="p-8 space-y-4">
+                        <div class="text-center py-20 text-slate-600 text-sm italic">Initialize connection to synchronize state.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
+    <script>
+        const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+        const ABI = [
+            "function societyName() view returns (string)",
+            "function membershipFee() view returns (uint256)",
+            "function treasuryBalance() view returns (uint256)",
+            "function eligibleVoterCount() view returns (uint256)",
+            "function requestCount() view returns (uint256)",
+            "function transferAndJoinMembership() payable",
+            "function proposeSpending(string description, string category, uint256 amount, address recipient)",
+            "function getSpendingRequest(uint256 requestId) view returns (string, string, uint256, address, address, uint256, uint256, uint256, uint256, bool, bool)"
+        ];
+
+        let provider, signer, contract;
+
+        async function connect() {
+            if (!window.ethereum) return alert("MetaMask not found");
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+                const [name, balance, fee, voters] = await Promise.all([
+                    contract.societyName(),
+                    contract.treasuryBalance(),
+                    contract.membershipFee(),
+                    contract.eligibleVoterCount()
+                ]);
+
+                document.getElementById("societyName").innerText = name;
+                document.getElementById("balance").innerText = ethers.formatEther(balance) + " ETH";
+                document.getElementById("fee").innerText = ethers.formatEther(fee) + " ETH";
+                document.getElementById("voters").innerText = voters.toString();
+                
+                const addr = await signer.getAddress();
+                document.getElementById("connectBtn").innerText = addr.substring(0,6) + "..." + addr.substring(38);
+                document.getElementById("connectBtn").className = "bg-slate-900 border border-slate-800 text-slate-400 px-8 py-3 rounded-2xl font-bold text-sm pointer-events-none";
+
+                await loadProposals();
+            } catch (err) { console.error("Connection failed", err); }
+        }
+
+        async function loadProposals() {
+            const count = await contract.requestCount();
+            const list = document.getElementById("proposalsList");
+            list.innerHTML = ""; 
+
+            if (count == 0) {
+                list.innerHTML = "<div class='text-center py-20 text-slate-700 text-sm italic'>No proposals active.</div>";
+                return;
+            }
+
+            for (let i = 1; i <= count; i++) {
+                const p = await contract.getSpendingRequest(i);
+                const status = p[10] ? 'Executed' : (p[9] ? 'Rejected' : 'Active');
+                const badgeColor = p[10] ? 'bg-slate-800 text-slate-500' : (p[9] ? 'bg-red-500/10 text-red-500' : 'bg-indigo-500/10 text-indigo-500');
+
+                list.insertAdjacentHTML('beforeend', `
+                    <div class="proposal-item p-6 rounded-[1.5rem] flex justify-between items-center group transition-all hover:bg-slate-800/40">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${badgeColor}">${status}</span>
+                                <h3 class="font-bold text-slate-100">${p[0]}</h3>
+                            </div>
+                            <p class="text-[10px] text-slate-500 font-medium uppercase tracking-tight">${p[1]} • To: ${p[3].substring(0,10)}...</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-lg font-black text-white italic">${ethers.formatEther(p[2])} ETH</p>
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Objections: ${p[8]} / ${p[7]}</p>
+                        </div>
+                    </div>
+                `);
+            }
+        }
+
+        async function joinMembership() {
+            if (!contract) return;
+            try {
+                const fee = await contract.membershipFee();
+                const tx = await contract.transferAndJoinMembership({ value: fee });
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Only non-committee students can join via this interface."); }
+        }
+
+        async function proposeSpending() {
+            if (!contract) return;
+            const desc = document.getElementById("propDesc").value;
+            const cat = document.getElementById("propCat").value;
+            const amt = document.getElementById("propAmount").value;
+            const recp = document.getElementById("propRecipient").value;
+            try {
+                const tx = await contract.proposeSpending(desc, cat, ethers.parseEther(amt), recp);
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Committee credentials required for proposals."); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById("connectBtn");
+            if (btn) btn.addEventListener('click', connect);
+        });
+    </script>
+</body>
+</html>

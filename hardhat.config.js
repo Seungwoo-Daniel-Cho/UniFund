@@ -8,6 +8,7 @@ module.exports = {
   solidity: {
     version: "0.8.20",
     settings: {
+      viaIR: true, 
       optimizer: {
         enabled: true,
         runs: 200,
@@ -15,9 +16,14 @@ module.exports = {
     },
   },
   networks: {
-    hardhat: {},
+    hardhat: {
+      blockGasLimit: 100000000,
+      allowUnlimitedContractSize: true,
+    },
     localhost: {
       url: "http://127.0.0.1:8545",
+      blockGasLimit: 100000000,
+      allowUnlimitedContractSize: true,
     },
     sepolia: {
       url: SEPOLIA_RPC_URL,
