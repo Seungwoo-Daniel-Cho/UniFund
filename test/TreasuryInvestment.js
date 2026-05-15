@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("UniFundTreasury Rule-Based Hedging", function () {
+describe("UniFundTreasury Quant Rebalancing", function () {
   let treasury;
   let owner, committee1, strategy;
   const membershipFee = ethers.parseEther("0.1");
@@ -26,35 +26,29 @@ describe("UniFundTreasury Rule-Based Hedging", function () {
     await treasury.allocateIdleFunds(ethers.parseEther("5"));
   });
 
-  it("Should propose a hedge correctly", async function () {
-    const amount = ethers.parseEther("2");
-    await treasury.proposeHedge(amount, true);
+  it("Should propose a rebalance correctly", async function () {
+    const targetRatio = 5000; // 50%
+    await treasury.proposeRebalance(targetRatio);
     const req = await treasury.hedgeRequests(1);
-    expect(req.amount).to.equal(amount);
-    expect(req.isHedge).to.be.true;
+    expect(req.targetRatio).to.equal(targetRatio);
   });
 
-  it("Should fail if exceeding max hedge ratio (80%)", async function () {
-    const tooMuch = ethers.parseEther("4.5"); // 4.5 > 80% of 5 (which is 4)
-    await expect(treasury.proposeHedge(tooMuch, true)).to.be.revertedWith("Exceeds max hedge ratio");
-  });
-
-  it("Should execute hedge after voting period", async function () {
-    const amount = ethers.parseEther("1");
-    await treasury.proposeHedge(amount, true);
+  it("Should execute rebalance and shift funds proportionally", async function () {
+    const targetRatio = 5000; // 50%
+    await treasury.proposeRebalance(targetRatio);
     
     // Advance time
     for(let i=0; i<101; i++) await ethers.provider.send("evm_mine");
 
-    await treasury.executeHedge(1);
-    expect(await treasury.totalHedged()).to.equal(amount);
+    await treasury.executeRebalance(1);
+    
+    // 50% of 5 ETH = 2.5 ETH
+    expect(await treasury.totalHedged()).to.equal(ethers.parseEther("2.5"));
+    expect(await treasury.totalInvested()).to.equal(ethers.parseEther("2.5"));
+    expect(await treasury.targetHedgeRatioBps()).to.equal(targetRatio);
   });
 
-  it("Should enforce cooldown rule", async function () {
-    await treasury.proposeHedge(ethers.parseEther("1"), true);
-    for(let i=0; i<101; i++) await ethers.provider.send("evm_mine");
-    await treasury.executeHedge(1);
-
-    await expect(treasury.proposeHedge(ethers.parseEther("1"), true)).to.be.revertedWith("Cooldown active");
+  it("Should fail if exceeding max hedge ratio (80%)", async function () {
+    await expect(treasury.proposeRebalance(8500)).to.be.revertedWith("Exceeds max hedge ratio");
   });
 });

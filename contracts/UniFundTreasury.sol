@@ -67,11 +67,11 @@ contract UniFundTreasury is ReentrancyGuard {
 
     uint256 public lastHedgeBlock;
     uint256 public maxHedgeRatioBps;
+    uint256 public targetHedgeRatioBps; // Current desired hedge level
     uint256 public hedgeRequestCount;
 
     struct HedgeRequest {
-        uint256 amount;
-        bool isHedge; // true for hedge, false for unhedge
+        uint256 targetRatio; // Desired ratio in BPS
         address proposer;
         uint256 proposedBlock;
         uint256 expiryBlock;
@@ -674,32 +674,24 @@ contract UniFundTreasury is ReentrancyGuard {
         totalInvested = newTotalInvested;
     }
 
-    event HedgeProposed(uint256 indexed id, uint256 amount, bool isHedge);
-    event HedgeExecuted(uint256 indexed id, uint256 amount, bool isHedge);
+    event PortfolioRebalanced(uint256 indexed id, uint256 newTargetRatio);
 
     /**
-     * @notice Proposes a hedging action subject to the treasury rules.
-     * Rules:
-     * 1. Cooldown: 500 blocks since last hedge.
-     * 2. Exposure: Cannot hedge more than 80% of growth.
-     * 3. Liquidity: Must maintain 10% liquid buffer.
+     * @notice Proposes a rebalancing of the portfolio's hedge ratio (Delta).
+     * @param targetRatioBps The desired percentage of growth assets to be hedged (0-8000).
      */
-    function proposeHedge(uint256 amount, bool isHedge) external onlyCommittee {
-        if (isHedge) {
-            require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
-            require(amount <= (totalInvested * maxHedgeRatioBps) / 10000, "Exceeds max hedge ratio");
-            uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
-            require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
-        } else {
-            require(amount <= totalHedged, "Insufficient hedged funds");
-        }
+    function proposeRebalance(uint256 targetRatioBps) external onlyCommittee {
+        require(targetRatioBps <= maxHedgeRatioBps, "Exceeds max hedge ratio");
+        require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
+
+        uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
+        require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
 
         uint256 voters = eligibleVoterCount();
         hedgeRequestCount++;
 
         hedgeRequests[hedgeRequestCount] = HedgeRequest({
-            amount: amount,
-            isHedge: isHedge,
+            targetRatio: targetRatioBps,
             proposer: msg.sender,
             proposedBlock: block.number,
             expiryBlock: block.number + votingPeriodBlocks,
@@ -707,7 +699,7 @@ contract UniFundTreasury is ReentrancyGuard {
             executed: false
         });
 
-        emit HedgeProposed(hedgeRequestCount, amount, isHedge);
+        emit PortfolioRebalanced(hedgeRequestCount, targetRatioBps);
     }
 
     function opposeHedge(uint256 requestId) external {
@@ -726,29 +718,28 @@ contract UniFundTreasury is ReentrancyGuard {
         return hedgeOppositionCount[requestId] * 2 > req.eligibleVoterSnapshot;
     }
 
-    function executeHedge(uint256 requestId) external nonReentrant {
+    function executeRebalance(uint256 requestId) external nonReentrant {
         HedgeRequest storage req = hedgeRequests[requestId];
         require(!req.executed, "Already executed");
         require(block.number > req.expiryBlock, "Voting not ended");
         require(!isHedgeRejected(requestId), "Rejected by voters");
 
-        if (req.isHedge) {
-            // Re-verify rules at execution time
-            require(req.amount <= (totalInvested * maxHedgeRatioBps) / 10000, "Exceeds max hedge ratio");
-            uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
-            require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
-            require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
+        // Re-verify rules at execution time
+        require(req.targetRatio <= maxHedgeRatioBps, "Exceeds max hedge ratio");
+        uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
+        require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
+        require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
 
-            totalInvested -= req.amount;
-            totalHedged += req.amount;
-            lastHedgeBlock = block.number;
-        } else {
-            require(req.amount <= totalHedged, "Insufficient hedged funds");
-            totalHedged -= req.amount;
-            totalInvested += req.amount;
-        }
+        // Calculate shift needed
+        uint256 totalPortfolio = totalInvested + totalHedged;
+        uint256 newHedged = (totalPortfolio * req.targetRatio) / 10000;
+        
+        totalHedged = newHedged;
+        totalInvested = totalPortfolio - newHedged;
+        targetHedgeRatioBps = req.targetRatio;
+        lastHedgeBlock = block.number;
 
         req.executed = true;
-        emit HedgeExecuted(requestId, req.amount, req.isHedge);
+        emit PortfolioRebalanced(requestId, req.targetRatio);
     }
 }
