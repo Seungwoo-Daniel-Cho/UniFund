@@ -3,148 +3,289 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UniFund | Protocol</title>
+    <title>UniFund | Advanced Treasury Protocol</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; color: #f8fafc; }
-        .stats-card { background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); border: 1px solid rgba(255,255,255,0.05); }
-        .action-card { background: #0f172a; border: 1px solid rgba(255,255,255,0.05); transition: border 0.3s ease; }
-        .action-card:hover { border-color: #6366f1; }
-        .input-field { background: #020617; border: 1px solid #1e293b; color: white; transition: all 0.2s; }
-        .input-field:focus { border-color: #6366f1; outline: none; box-shadow: 0 0 0 1px #6366f1; }
-        .proposal-item { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05); }
+        :root {
+            --bg-deep: #020617;
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --accent-indigo: #6366f1;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: radial-gradient(circle at top right, #1e1b4b, #020617);
+            color: #f8fafc; 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, .font-display { font-family: 'Outfit', sans-serif; }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-hover:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            background: rgba(30, 41, 59, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .stats-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-emerald {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.2);
+        }
+
+        .input-field {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            border-color: var(--accent-indigo);
+            background: rgba(0, 0, 0, 0.4);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .scroll-hide::-webkit-scrollbar { display: none; }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse-glow 2s infinite;
+        }
     </style>
 </head>
-<body class="antialiased">
+<body class="p-4 md:p-8">
 
-    <nav class="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
+    <!-- Navigation -->
+    <nav class="max-w-7xl mx-auto flex justify-between items-center mb-12 p-6 glass rounded-[2.5rem]">
         <div class="flex items-center gap-4">
-            <div class="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-xl">U</div>
+            <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg shadow-indigo-500/20">U</div>
             <div>
-                <h1 class="font-extrabold text-xl tracking-tight">UNIFUND</h1>
-                <p id="societyName" class="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Protocol Offline</p>
+                <h1 class="text-xl font-bold tracking-tight" id="societyName">UniFund Protocol</h1>
+                <div class="flex items-center gap-2">
+                    <div class="live-dot"></div>
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Network Live</span>
+                </div>
             </div>
         </div>
-        <button id="connectBtn" class="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-500/20">Connect Wallet</button>
+        <button id="connectBtn" class="btn-primary px-8 py-3.5 rounded-2xl font-bold text-sm tracking-tight">Connect Wallet</button>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div class="stats-card p-8 rounded-[2rem]">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Treasury</span>
-                <div id="balance" class="text-3xl font-extrabold mt-2 italic">0.00 ETH</div>
+    <main class="max-w-7xl mx-auto">
+        <!-- Top Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div class="glass stats-card p-8 rounded-[2.5rem]">
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Liquid Treasury</p>
+                <div id="balance" class="text-3xl font-display font-bold text-white">0.00 ETH</div>
             </div>
-            <div class="stats-card p-8 rounded-[2rem]">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Membership Fee</span>
-                <div id="fee" class="text-3xl font-extrabold mt-2 italic">0.00 ETH</div>
+            <div class="glass stats-card p-8 rounded-[2.5rem]">
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Active Growth</p>
+                <div id="invested" class="text-3xl font-display font-bold text-indigo-400">0.00 ETH</div>
             </div>
-            <div class="stats-card p-8 rounded-[2rem]">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Invested Assets</span>
-                <div id="invested" class="text-3xl font-extrabold mt-2 italic text-indigo-400">0.00 ETH</div>
+            <div class="glass stats-card p-8 rounded-[2.5rem]">
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Hedged Stable</p>
+                <div id="hedged" class="text-3xl font-display font-bold text-emerald-400">0.00 ETH</div>
             </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-            <div class="stats-card p-8 rounded-[2rem] border-indigo-500/20">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Reserve Requirement</span>
-                <div id="reserveRatio" class="text-3xl font-extrabold mt-2 italic">20.00%</div>
-                <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Minimum liquidity for operations</p>
-            </div>
-            <div class="stats-card p-8 rounded-[2rem] border-green-500/20">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Idle for Investment</span>
-                <div id="idleFunds" class="text-3xl font-extrabold mt-2 italic text-green-400">0.00 ETH</div>
-                <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Safe to allocate now</p>
+            <div class="glass stats-card p-8 rounded-[2.5rem]">
+                <p class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Eligible Voters</p>
+                <div id="voters" class="text-3xl font-display font-bold text-white">0</div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <div class="lg:col-span-1 glass p-8 rounded-[2.5rem] flex flex-col items-center">
+                <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-8">Allocation</h3>
+                <div class="w-full aspect-square max-w-[240px]">
+                    <canvas id="portfolioChart"></canvas>
+                </div>
+            </div>
+            <div class="lg:col-span-2 glass p-8 rounded-[2.5rem]">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 class="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Growth Performance</h3>
+                    <div class="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full uppercase tracking-widest">+12.4% (Mock)</div>
+                </div>
+                <div class="h-64">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guardrails Section -->
+        <div class="glass p-10 rounded-[3rem] mb-12 border-indigo-500/10 text-center">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 items-center">
+                <div class="space-y-1">
+                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-widest">Reserve Ratio</p>
+                    <div id="reserveRatio" class="text-2xl font-display font-bold">20.00%</div>
+                </div>
+                <div class="space-y-1 py-6 md:py-0 border-y md:border-y-0 md:border-x border-white/5">
+                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-widest">Liquidity Buffer</p>
+                    <div id="ruleLiquidity" class="text-2xl font-display font-bold text-emerald-400">Min 10%</div>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-widest">Hedge Cooldown</p>
+                    <div id="ruleCooldown" class="text-2xl font-display font-bold text-orange-400">--</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Sidebar Controls -->
             <div class="lg:col-span-4 space-y-6">
-                <div class="action-card p-8 rounded-[2rem]">
-                    <h2 class="text-lg font-bold mb-1">Access Protocol</h2>
-                    <p class="text-slate-400 text-xs mb-8">Participate in governance by securing your membership.</p>
-                    <button onclick="joinMembership()" class="w-full bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-sm transition">Join Society</button>
-                </div>
-
-                <div class="action-card p-8 rounded-[2rem] border-indigo-500/30">
-                    <h2 class="text-lg font-bold mb-1">Investment Management</h2>
-                    <p class="text-slate-400 text-xs mb-8">Allocate idle funds to generate yield or divest back to treasury.</p>
+                <!-- Trading Terminal -->
+                <div class="glass p-8 rounded-[2.5rem] stats-card">
+                    <h2 class="text-xl font-bold mb-1 text-emerald-400">Trading Desk</h2>
+                    <p class="text-slate-500 text-xs mb-8 font-medium">Propose hedging strategies for growth assets.</p>
                     <div class="space-y-4">
-                        <input id="investAmount" type="number" step="0.01" placeholder="Amount (ETH)" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
-                        <div class="grid grid-cols-2 gap-3">
-                            <button onclick="allocateFunds()" class="bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-[11px] uppercase tracking-tighter transition">Allocate</button>
-                            <button onclick="divestFunds()" class="bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-[11px] uppercase tracking-tighter transition">Divest</button>
+                        <div class="relative">
+                            <input id="tradeAmount" type="number" step="0.01" placeholder="0.00" class="input-field w-full px-6 py-4 rounded-2xl text-lg font-bold text-white">
+                            <span class="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold">ETH</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="proposeHedge(true)" class="btn-emerald py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest transition-all">Propose Hedge</button>
+                            <button onclick="proposeHedge(false)" class="bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest transition-all">Propose Unhedge</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="action-card p-8 rounded-[2rem]">
-                    <h2 class="text-lg font-bold mb-6">New Proposal</h2>
+                <!-- Investment Management -->
+                <div class="glass p-8 rounded-[2.5rem]">
+                    <h2 class="text-xl font-bold mb-1 text-indigo-400">Yield Engine</h2>
+                    <p class="text-slate-500 text-xs mb-8 font-medium">Allocate idle capital to generated yield.</p>
                     <div class="space-y-4">
-                        <input id="propDesc" type="text" placeholder="Description" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
-                        <input id="propCat" type="text" placeholder="Category" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
-                        <input id="propAmount" type="number" step="0.01" placeholder="Amount (ETH)" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
-                        <input id="propRecipient" type="text" placeholder="Recipient Address" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
-                        <button onclick="proposeSpending()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-sm mt-4 transition shadow-lg shadow-indigo-500/10">Submit Proposal</button>
+                        <div class="bg-white/5 p-4 rounded-2xl mb-4 border border-white/5">
+                            <p class="text-[10px] text-slate-500 font-black uppercase mb-1">Available for Investment</p>
+                            <p id="idleFunds" class="text-xl font-display font-bold">0.00 ETH</p>
+                        </div>
+                        <input id="investAmount" type="number" step="0.01" placeholder="Amount (ETH)" class="input-field w-full px-6 py-4 rounded-2xl text-sm">
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="allocateFunds()" class="btn-primary py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest">Allocate</button>
+                            <button onclick="divestFunds()" class="bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest">Divest</button>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Access Card -->
+                <div class="glass p-8 rounded-[2.5rem] border-indigo-500/20">
+                    <h2 class="text-xl font-bold mb-1">Member Portal</h2>
+                    <p class="text-slate-500 text-xs mb-8 font-medium">Join the protocol to gain voting rights.</p>
+                    <p class="text-[10px] text-slate-500 font-black uppercase mb-2">Society Fee</p>
+                    <div id="fee" class="text-2xl font-display font-bold mb-6">0.00 ETH</div>
+                    <button onclick="joinMembership()" class="w-full btn-primary py-4 rounded-2xl font-bold text-sm">Join Society</button>
                 </div>
             </div>
 
+            <!-- Main Content: Governance -->
             <div class="lg:col-span-8">
-                <div class="action-card rounded-[2rem] min-h-[500px]">
-                    <div class="p-8 border-b border-white/5 flex justify-between items-center">
-                        <h2 class="font-bold">Governance Feed</h2>
-                        <div class="flex items-center gap-2">
-                            <span class="h-2 w-2 bg-indigo-500 rounded-full animate-pulse"></span>
-                            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Network Live</span>
-                        </div>
+                <div class="glass p-10 rounded-[3rem] h-full">
+                    <div class="flex justify-between items-center mb-10">
+                        <h2 class="text-2xl font-bold font-display">Governance Flow</h2>
+                        <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Real-time Stream</div>
                     </div>
-                    <div id="proposalsList" class="p-8 space-y-4">
-                        <div class="text-center py-20 text-slate-600 text-sm italic">Initialize connection to synchronize state.</div>
+
+                    <div id="proposalsList" class="space-y-6 max-h-[1000px] overflow-y-auto scroll-hide pr-2">
+                        <!-- Proposals injected here -->
+                        <div class='text-center py-40 text-slate-700 text-sm italic font-medium'>Connect wallet to load active governance data.</div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
     <script>
         const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
         const ABI = [
             "function societyName() view returns (string)",
             "function membershipFee() view returns (uint256)",
-            "function treasuryBalance() view returns (uint256)",
-            "function eligibleVoterCount() view returns (uint256)",
-            "function requestCount() view returns (uint256)",
-            "function transferAndJoinMembership() payable",
-            "function proposeSpending(string description, string category, uint256 amount, address recipient)",
-            "function getSpendingRequest(uint256 requestId) view returns (string, string, uint256, address, address, uint256, uint256, uint256, uint256, bool, bool)",
+            "function getLiquidBalance() view returns (uint256)",
             "function totalInvested() view returns (uint256)",
+            "function eligibleVoterCount() view returns (uint256)",
             "function reserveRatioBps() view returns (uint256)",
             "function getIdleFunds() view returns (uint256)",
             "function allocateIdleFunds(uint256 amount)",
             "function divestFunds(uint256 amount)",
-            "function setInvestmentStrategy(address strategy)"
+            "function setInvestmentStrategy(address strategy)",
+            "function totalHedged() view returns (uint256)",
+            "function hedgeRequestCount() view returns (uint256)",
+            "function lastHedgeBlock() view returns (uint256)",
+            "function proposeHedge(uint256 amount, bool isHedge)",
+            "function opposeHedge(uint256 requestId)",
+            "function executeHedge(uint256 requestId)",
+            "function isHedgeRejected(uint256 requestId) view returns (bool)",
+            "function hedgeRequests(uint256 requestId) view returns (uint256, bool, address, uint256, uint256, uint256, bool)",
+            "function hedgeOppositionCount(uint256 requestId) view returns (uint256)",
+            "function requestCount() view returns (uint256)",
+            "function getSpendingRequest(uint256) view returns (string, string, uint256, address, address, uint256, uint256, uint256, uint256, bool, bool)",
+            "function transferAndJoinMembership() payable"
         ];
 
         let provider, signer, contract;
 
         async function connect() {
-            if (!window.ethereum) return alert("MetaMask not found");
-            try {
-                await window.ethereum.request({ method: 'eth_requestAccounts' });
+            if (window.ethereum) {
                 provider = new ethers.BrowserProvider(window.ethereum);
                 signer = await provider.getSigner();
                 contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-                const [name, balance, fee, voters, invested, ratio, idle] = await Promise.all([
+                const [name, balance, fee, voters, invested, ratio, idle, hedged, lastHedge] = await Promise.all([
                     contract.societyName(),
-                    contract.treasuryBalance(),
+                    contract.getLiquidBalance(),
                     contract.membershipFee(),
                     contract.eligibleVoterCount(),
                     contract.totalInvested(),
                     contract.reserveRatioBps(),
-                    contract.getIdleFunds()
+                    contract.getIdleFunds(),
+                    contract.totalHedged(),
+                    contract.lastHedgeBlock()
                 ]);
 
                 document.getElementById("societyName").innerText = name;
@@ -152,93 +293,226 @@
                 document.getElementById("fee").innerText = ethers.formatEther(fee) + " ETH";
                 document.getElementById("voters").innerText = voters.toString();
                 document.getElementById("invested").innerText = ethers.formatEther(invested) + " ETH";
+                document.getElementById("hedged").innerText = ethers.formatEther(hedged) + " ETH";
                 document.getElementById("reserveRatio").innerText = (Number(ratio) / 100).toFixed(2) + "%";
                 document.getElementById("idleFunds").innerText = ethers.formatEther(idle) + " ETH";
                 
-                const addr = await signer.getAddress();
-                document.getElementById("connectBtn").innerText = addr.substring(0,6) + "..." + addr.substring(38);
-                document.getElementById("connectBtn").className = "bg-slate-900 border border-slate-800 text-slate-400 px-8 py-3 rounded-2xl font-bold text-sm pointer-events-none";
+                const currentBlock = await provider.getBlockNumber();
+                const cooldownRemaining = Math.max(0, 500 - (Number(currentBlock) - Number(lastHedge)));
+                const cooldownEl = document.getElementById("ruleCooldown");
+                if (cooldownRemaining > 0) {
+                    cooldownEl.innerText = `${cooldownRemaining} Blocks`;
+                    cooldownEl.className = "text-2xl font-display font-bold text-orange-400";
+                } else {
+                    cooldownEl.innerText = "Ready";
+                    cooldownEl.className = "text-2xl font-display font-bold text-emerald-400";
+                }
 
-                await loadProposals();
-            } catch (err) { console.error("Connection failed", err); }
+                updateCharts(balance, invested, hedged);
+                
+                const addr = await signer.getAddress();
+                const btn = document.getElementById("connectBtn");
+                btn.innerText = addr.substring(0,6) + "..." + addr.substring(38);
+                btn.className = "glass px-8 py-3.5 rounded-2xl font-bold text-sm text-slate-400 pointer-events-none";
+                
+                loadProposals();
+            }
         }
 
         async function loadProposals() {
             const count = await contract.requestCount();
+            const hedgeCount = await contract.hedgeRequestCount();
             const list = document.getElementById("proposalsList");
             list.innerHTML = ""; 
 
-            if (count == 0) {
-                list.innerHTML = "<div class='text-center py-20 text-slate-700 text-sm italic'>No proposals active.</div>";
+            if (count == 0 && hedgeCount == 0) {
+                list.innerHTML = "<div class='text-center py-40 text-slate-700 text-sm italic font-medium'>No active governance proposals.</div>";
                 return;
             }
 
             for (let i = 1; i <= count; i++) {
                 const p = await contract.getSpendingRequest(i);
-                const status = p[10] ? 'Executed' : (p[9] ? 'Rejected' : 'Active');
-                const badgeColor = p[10] ? 'bg-slate-800 text-slate-500' : (p[9] ? 'bg-red-500/10 text-red-500' : 'bg-indigo-500/10 text-indigo-500');
+                renderProposal(i, p, 'spend');
+            }
 
-                list.insertAdjacentHTML('beforeend', `
-                    <div class="proposal-item p-6 rounded-[1.5rem] flex justify-between items-center group transition-all hover:bg-slate-800/40">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${badgeColor}">${status}</span>
-                                <h3 class="font-bold text-slate-100">${p[0]}</h3>
-                            </div>
-                            <p class="text-[10px] text-slate-500 font-medium uppercase tracking-tight">${p[1]} • To: ${p[3].substring(0,10)}...</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-lg font-black text-white italic">${ethers.formatEther(p[2])} ETH</p>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase">Objections: ${p[8]} / ${p[7]}</p>
-                        </div>
-                    </div>
-                `);
+            for (let i = 1; i <= hedgeCount; i++) {
+                const p = await contract.hedgeRequests(i);
+                const opposition = await contract.hedgeOppositionCount(i);
+                const pFormatted = [
+                    p[1] ? 'Hedge Strategy Deployment' : 'Hedge Position Divestment', 
+                    'Financial Operations', 
+                    p[0], 
+                    '', 
+                    p[2], 
+                    p[3], 
+                    p[4], 
+                    p[5], 
+                    opposition, 
+                    false, 
+                    p[6]
+                ];
+                pFormatted[9] = await contract.isHedgeRejected(i);
+                renderProposal(i, pFormatted, 'hedge');
             }
         }
 
-        async function joinMembership() {
-            if (!contract) return;
-            try {
-                const fee = await contract.membershipFee();
-                const tx = await contract.transferAndJoinMembership({ value: fee });
-                await tx.wait();
-                location.reload();
-            } catch (err) { alert("Only non-committee students can join via this interface."); }
+        function renderProposal(id, p, type) {
+            const list = document.getElementById("proposalsList");
+            const status = p[10] ? 'Executed' : (p[9] ? 'Rejected' : 'Active');
+            const isHedge = type === 'hedge';
+            
+            let badgeStyle = "bg-indigo-500/10 text-indigo-400";
+            if (p[10]) badgeStyle = "bg-slate-800 text-slate-500";
+            else if (p[9]) badgeStyle = "bg-rose-500/10 text-rose-500";
+            else if (isHedge) badgeStyle = "bg-emerald-500/10 text-emerald-400";
+
+            const actionBtns = (status === 'Active') 
+                ? `<div class="flex gap-3 mt-6">
+                    <button onclick="opposeProposal(${id}, '${type}')" class="px-6 py-2.5 bg-rose-500/10 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-rose-500/20 hover:bg-rose-500/20 transition-all">Oppose</button>
+                    <button onclick="executeProposal(${id}, '${type}')" class="px-6 py-2.5 glass text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">Execute</button>
+                   </div>` 
+                : "";
+
+            list.insertAdjacentHTML('beforeend', `
+                <div class="p-8 rounded-[2rem] glass-hover glass transition-all border-white/5">
+                    <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <span class="text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-lg ${badgeStyle}">${status}</span>
+                                <h3 class="text-lg font-bold text-white">${p[0]}</h3>
+                            </div>
+                            <p class="text-[11px] text-slate-500 font-bold uppercase tracking-widest">${p[1]} ${p[3] ? '• Recipient: ' + p[3].substring(0,8) + '...' : ''}</p>
+                        </div>
+                        <div class="text-left md:text-right">
+                            <p class="text-2xl font-display font-black text-white italic">${ethers.formatEther(p[2])} <span class="text-sm font-medium not-italic text-slate-500">ETH</span></p>
+                            <p class="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Quorum: ${p[8]} / ${p[7]} Objections</p>
+                        </div>
+                    </div>
+                    ${actionBtns}
+                </div>
+            `);
         }
 
-        async function proposeSpending() {
-            if (!contract) return;
-            const desc = document.getElementById("propDesc").value;
-            const cat = document.getElementById("propCat").value;
-            const amt = document.getElementById("propAmount").value;
-            const recp = document.getElementById("propRecipient").value;
+        async function opposeProposal(id, type) {
             try {
-                const tx = await contract.proposeSpending(desc, cat, ethers.parseEther(amt), recp);
+                const tx = type === 'spend' ? await contract.opposeSpending(id) : await contract.opposeHedge(id);
                 await tx.wait();
                 location.reload();
-            } catch (err) { alert("Committee credentials required for proposals."); }
+            } catch (err) { alert("Action failed."); }
+        }
+
+        async function executeProposal(id, type) {
+            try {
+                const tx = type === 'spend' ? await contract.executeSpending(id) : await contract.executeHedge(id);
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Execution criteria not met."); }
+        }
+
+        async function joinMembership() {
+            try {
+                const tx = await contract.transferAndJoinMembership({ value: await contract.membershipFee() });
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Failed to join."); }
         }
 
         async function allocateFunds() {
-            if (!contract) return;
             const amt = document.getElementById("investAmount").value;
             try {
-                // Ensure strategy is set for demo purposes if not already
-                // await contract.setInvestmentStrategy("0x70997970C51812dc3A010C7d01b50e0d17dc79C8"); 
                 const tx = await contract.allocateIdleFunds(ethers.parseEther(amt));
                 await tx.wait();
                 location.reload();
-            } catch (err) { alert("Allocation failed: Ensure strategy is set and idle funds are available."); }
+            } catch (err) { alert("Allocation failed."); }
         }
 
         async function divestFunds() {
-            if (!contract) return;
             const amt = document.getElementById("investAmount").value;
             try {
                 const tx = await contract.divestFunds(ethers.parseEther(amt));
                 await tx.wait();
                 location.reload();
             } catch (err) { alert("Divestment failed."); }
+        }
+
+        async function proposeHedge(isHedge) {
+            const amt = document.getElementById("tradeAmount").value;
+            try {
+                const tx = await contract.proposeHedge(ethers.parseEther(amt), isHedge);
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Proposal blocked by guardrails."); }
+        }
+
+        let portChart, perfChart;
+        function updateCharts(liquid, growth, hedged) {
+            const ctx1 = document.getElementById('portfolioChart').getContext('2d');
+            const l = Number(ethers.formatEther(liquid));
+            const g = Number(ethers.formatEther(growth));
+            const h = Number(ethers.formatEther(hedged));
+
+            if (portChart) portChart.destroy();
+            portChart = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Liquid', 'Growth', 'Hedged'],
+                    datasets: [{
+                        data: [l, g, h],
+                        backgroundColor: ['#6366f1', '#4f46e5', '#10b981'],
+                        hoverOffset: 10,
+                        borderWidth: 0
+                    }]
+                },
+                options: { 
+                    cutout: '80%', 
+                    plugins: { 
+                        legend: { display: false } 
+                    } 
+                }
+            });
+
+            const ctx2 = document.getElementById('performanceChart').getContext('2d');
+            if (perfChart) perfChart.destroy();
+            perfChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Current'],
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: [l+g+h-0.4, l+g+h-0.2, l+g+h-0.3, l+g+h+0.1, l+g+h+0.2, l+g+h],
+                        borderColor: '#6366f1',
+                        borderWidth: 3,
+                        tension: 0.5,
+                        fill: true,
+                        backgroundColor: (context) => {
+                            const chart = context.chart;
+                            const {ctx, chartArea} = chart;
+                            if (!chartArea) return null;
+                            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.2)');
+                            gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+                            return gradient;
+                        },
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#6366f1',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 3
+                    }]
+                },
+                options: { 
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { display: false },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#475569', font: { weight: 'bold', size: 10 } }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {

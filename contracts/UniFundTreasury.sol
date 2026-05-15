@@ -52,9 +52,36 @@ contract UniFundTreasury is ReentrancyGuard {
     uint256 public totalInvested;
 
     /**
+     * @notice Total amount of ETH currently moved to hedged/stable positions.
+     */
+    uint256 public totalHedged;
+
+    /**
      * @notice The address where idle funds are sent for yield generation.
      */
     address public investmentStrategy;
+
+    /*//////////////////////////////////////////////////////////////
+                        HEDGING GOVERNANCE & RULES
+    //////////////////////////////////////////////////////////////*/
+
+    uint256 public lastHedgeBlock;
+    uint256 public maxHedgeRatioBps;
+    uint256 public hedgeRequestCount;
+
+    struct HedgeRequest {
+        uint256 amount;
+        bool isHedge; // true for hedge, false for unhedge
+        address proposer;
+        uint256 proposedBlock;
+        uint256 expiryBlock;
+        uint256 eligibleVoterSnapshot;
+        bool executed;
+    }
+
+    mapping(uint256 => HedgeRequest) public hedgeRequests;
+    mapping(uint256 => mapping(address => bool)) public hasOpposedHedge;
+    mapping(uint256 => uint256) public hedgeOppositionCount;
 
     constructor(
         string memory _societyName,
@@ -72,6 +99,7 @@ contract UniFundTreasury is ReentrancyGuard {
         membershipDurationBlocks = _membershipDurationBlocks;
         votingPeriodBlocks = _votingPeriodBlocks;
         reserveRatioBps = 2000; // Default 20% reserve
+        maxHedgeRatioBps = 8000; // Default 80% max hedge
 
         // Deployer automatically becomes the first committee member.
         _addCommitteeMember(msg.sender);
@@ -327,7 +355,7 @@ contract UniFundTreasury is ReentrancyGuard {
     }
 
     function treasuryBalance() public view returns (uint256) {
-        return address(this).balance + totalInvested;
+        return address(this).balance + totalInvested + totalHedged;
     }
 
     function getLiquidBalance() public view returns (uint256) {
@@ -644,5 +672,83 @@ contract UniFundTreasury is ReentrancyGuard {
      */
     function adjustInvestmentAccounting(uint256 newTotalInvested) external onlyCommittee {
         totalInvested = newTotalInvested;
+    }
+
+    event HedgeProposed(uint256 indexed id, uint256 amount, bool isHedge);
+    event HedgeExecuted(uint256 indexed id, uint256 amount, bool isHedge);
+
+    /**
+     * @notice Proposes a hedging action subject to the treasury rules.
+     * Rules:
+     * 1. Cooldown: 500 blocks since last hedge.
+     * 2. Exposure: Cannot hedge more than 80% of growth.
+     * 3. Liquidity: Must maintain 10% liquid buffer.
+     */
+    function proposeHedge(uint256 amount, bool isHedge) external onlyCommittee {
+        if (isHedge) {
+            require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
+            require(amount <= (totalInvested * maxHedgeRatioBps) / 10000, "Exceeds max hedge ratio");
+            uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
+            require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
+        } else {
+            require(amount <= totalHedged, "Insufficient hedged funds");
+        }
+
+        uint256 voters = eligibleVoterCount();
+        hedgeRequestCount++;
+
+        hedgeRequests[hedgeRequestCount] = HedgeRequest({
+            amount: amount,
+            isHedge: isHedge,
+            proposer: msg.sender,
+            proposedBlock: block.number,
+            expiryBlock: block.number + votingPeriodBlocks,
+            eligibleVoterSnapshot: voters,
+            executed: false
+        });
+
+        emit HedgeProposed(hedgeRequestCount, amount, isHedge);
+    }
+
+    function opposeHedge(uint256 requestId) external {
+        HedgeRequest storage req = hedgeRequests[requestId];
+        require(isEligibleVoter(msg.sender), "Not eligible voter");
+        require(!req.executed, "Already executed");
+        require(block.number <= req.expiryBlock, "Voting ended");
+        require(!hasOpposedHedge[requestId][msg.sender], "Already opposed");
+
+        hasOpposedHedge[requestId][msg.sender] = true;
+        hedgeOppositionCount[requestId]++;
+    }
+
+    function isHedgeRejected(uint256 requestId) public view returns (bool) {
+        HedgeRequest storage req = hedgeRequests[requestId];
+        return hedgeOppositionCount[requestId] * 2 > req.eligibleVoterSnapshot;
+    }
+
+    function executeHedge(uint256 requestId) external nonReentrant {
+        HedgeRequest storage req = hedgeRequests[requestId];
+        require(!req.executed, "Already executed");
+        require(block.number > req.expiryBlock, "Voting not ended");
+        require(!isHedgeRejected(requestId), "Rejected by voters");
+
+        if (req.isHedge) {
+            // Re-verify rules at execution time
+            require(req.amount <= (totalInvested * maxHedgeRatioBps) / 10000, "Exceeds max hedge ratio");
+            uint256 liquidBuffer = (treasuryBalance() * 10) / 100;
+            require(address(this).balance >= liquidBuffer, "Insufficient liquid buffer");
+            require(lastHedgeBlock == 0 || block.number >= lastHedgeBlock + 500, "Cooldown active");
+
+            totalInvested -= req.amount;
+            totalHedged += req.amount;
+            lastHedgeBlock = block.number;
+        } else {
+            require(req.amount <= totalHedged, "Insufficient hedged funds");
+            totalHedged -= req.amount;
+            totalInvested += req.amount;
+        }
+
+        req.executed = true;
+        emit HedgeExecuted(requestId, req.amount, req.isHedge);
     }
 }
