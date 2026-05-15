@@ -36,6 +36,26 @@ contract UniFundTreasury is ReentrancyGuard {
     uint256 public membershipDurationBlocks;
     uint256 public votingPeriodBlocks;
 
+    /*//////////////////////////////////////////////////////////////
+                        INVESTMENT & RESERVES
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice The percentage of total treasury that must remain liquid.
+     *         Expressed in basis points (10000 = 100%).
+     */
+    uint256 public reserveRatioBps;
+
+    /**
+     * @notice Total amount of ETH currently held in external investment strategies.
+     */
+    uint256 public totalInvested;
+
+    /**
+     * @notice The address where idle funds are sent for yield generation.
+     */
+    address public investmentStrategy;
+
     constructor(
         string memory _societyName,
         address[] memory _initialCommittee,
@@ -51,6 +71,7 @@ contract UniFundTreasury is ReentrancyGuard {
         membershipFee = _membershipFee;
         membershipDurationBlocks = _membershipDurationBlocks;
         votingPeriodBlocks = _votingPeriodBlocks;
+        reserveRatioBps = 2000; // Default 20% reserve
 
         // Deployer automatically becomes the first committee member.
         _addCommitteeMember(msg.sender);
@@ -306,6 +327,10 @@ contract UniFundTreasury is ReentrancyGuard {
     }
 
     function treasuryBalance() public view returns (uint256) {
+        return address(this).balance + totalInvested;
+    }
+
+    function getLiquidBalance() public view returns (uint256) {
         return address(this).balance;
     }
 
@@ -540,21 +565,84 @@ contract UniFundTreasury is ReentrancyGuard {
                 FUTURE DEVELOPMENT PLACEHOLDERS
     //////////////////////////////////////////////////////////////*/
 
+    /*//////////////////////////////////////////////////////////////
+                        INVESTMENT & RISK MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    event ReserveRatioUpdated(uint256 newRatio);
+    event InvestmentStrategyUpdated(address indexed strategy);
+    event FundsAllocated(address indexed strategy, uint256 amount);
+    event FundsDivested(address indexed strategy, uint256 amount);
+
     /**
-     * Future feature 1: Milestone-based sponsor funding
-     * - Sponsor locks funding
-     * - Society receives each tranche only after reaching agreed targets
-     *
-     * Future feature 2: Refundable campaigns
-     * - If funding goal is not reached before deadline, contributors can refund
-     *
-     * Future feature 3: Society track record
-     * - Public record of funding success, spending discipline and execution history
-     *
-     * Future feature 4: Joint society treasury
-     * - Multiple societies co-manage one shared event fund
-     *
-     * Future feature 5: Idle treasury / reserve allocation
-     * - Daniel can implement reserve ratio and low-risk allocation logic here
+     * @notice Updates the required reserve ratio.
      */
+    function setReserveRatio(uint256 _bps) external onlyCommittee {
+        require(_bps <= 10000, "Invalid ratio");
+        reserveRatioBps = _bps;
+        emit ReserveRatioUpdated(_bps);
+    }
+
+    /**
+     * @notice Updates the investment strategy address.
+     */
+    function setInvestmentStrategy(address _strategy) external onlyCommittee {
+        require(_strategy != address(0), "Invalid address");
+        investmentStrategy = _strategy;
+        emit InvestmentStrategyUpdated(_strategy);
+    }
+
+    /**
+     * @notice Calculates how much ETH can be safely invested.
+     * @return The amount of idle funds available for investment.
+     */
+    function getIdleFunds() public view returns (uint256) {
+        uint256 total = treasuryBalance();
+        uint256 requiredReserve = (total * reserveRatioBps) / 10000;
+        
+        uint256 currentLiquid = address(this).balance;
+        if (currentLiquid <= requiredReserve) {
+            return 0;
+        }
+        return currentLiquid - requiredReserve;
+    }
+
+    /**
+     * @notice Moves idle funds to the investment strategy.
+     */
+    function allocateIdleFunds(uint256 amount) external onlyCommittee nonReentrant {
+        require(investmentStrategy != address(0), "Strategy not set");
+        uint256 idle = getIdleFunds();
+        require(amount <= idle, "Amount exceeds idle funds");
+
+        totalInvested += amount;
+        
+        (bool success, ) = payable(investmentStrategy).call{value: amount}("");
+        require(success, "Allocation failed");
+
+        emit FundsAllocated(investmentStrategy, amount);
+    }
+
+    /**
+     * @notice Pulls funds back from the investment strategy to the treasury.
+     * @dev This is called manually by the committee if liquidity is needed.
+     */
+    function divestFunds(uint256 amount) external onlyCommittee nonReentrant {
+        require(amount <= totalInvested, "Amount exceeds invested funds");
+        require(investmentStrategy != address(0), "Strategy not set");
+
+        // Note: In a real integration, this would call the strategy contract to withdraw.
+        // For this demo/student project, we assume the strategy sends ETH back or 
+        // the committee uses this to record a manual withdrawal.
+        
+        totalInvested -= amount;
+        emit FundsDivested(investmentStrategy, amount);
+    }
+
+    /**
+     * @notice Emergency function to adjust investment accounting if losses occur.
+     */
+    function adjustInvestmentAccounting(uint256 newTotalInvested) external onlyCommittee {
+        totalInvested = newTotalInvested;
+    }
 }

@@ -40,8 +40,21 @@
                 <div id="fee" class="text-3xl font-extrabold mt-2 italic">0.00 ETH</div>
             </div>
             <div class="stats-card p-8 rounded-[2rem]">
-                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Eligible Voters</span>
-                <div id="voters" class="text-3xl font-extrabold mt-2 italic">0</div>
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Invested Assets</span>
+                <div id="invested" class="text-3xl font-extrabold mt-2 italic text-indigo-400">0.00 ETH</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div class="stats-card p-8 rounded-[2rem] border-indigo-500/20">
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Reserve Requirement</span>
+                <div id="reserveRatio" class="text-3xl font-extrabold mt-2 italic">20.00%</div>
+                <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Minimum liquidity for operations</p>
+            </div>
+            <div class="stats-card p-8 rounded-[2rem] border-green-500/20">
+                <span class="text-slate-500 text-xs font-bold uppercase tracking-widest">Idle for Investment</span>
+                <div id="idleFunds" class="text-3xl font-extrabold mt-2 italic text-green-400">0.00 ETH</div>
+                <p class="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Safe to allocate now</p>
             </div>
         </div>
 
@@ -51,6 +64,18 @@
                     <h2 class="text-lg font-bold mb-1">Access Protocol</h2>
                     <p class="text-slate-400 text-xs mb-8">Participate in governance by securing your membership.</p>
                     <button onclick="joinMembership()" class="w-full bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-sm transition">Join Society</button>
+                </div>
+
+                <div class="action-card p-8 rounded-[2rem] border-indigo-500/30">
+                    <h2 class="text-lg font-bold mb-1">Investment Management</h2>
+                    <p class="text-slate-400 text-xs mb-8">Allocate idle funds to generate yield or divest back to treasury.</p>
+                    <div class="space-y-4">
+                        <input id="investAmount" type="number" step="0.01" placeholder="Amount (ETH)" class="input-field w-full px-5 py-4 rounded-2xl text-sm">
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="allocateFunds()" class="bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-[11px] uppercase tracking-tighter transition">Allocate</button>
+                            <button onclick="divestFunds()" class="bg-slate-800 hover:bg-slate-700 py-4 rounded-2xl font-bold text-[11px] uppercase tracking-tighter transition">Divest</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="action-card p-8 rounded-[2rem]">
@@ -93,7 +118,13 @@
             "function requestCount() view returns (uint256)",
             "function transferAndJoinMembership() payable",
             "function proposeSpending(string description, string category, uint256 amount, address recipient)",
-            "function getSpendingRequest(uint256 requestId) view returns (string, string, uint256, address, address, uint256, uint256, uint256, uint256, bool, bool)"
+            "function getSpendingRequest(uint256 requestId) view returns (string, string, uint256, address, address, uint256, uint256, uint256, uint256, bool, bool)",
+            "function totalInvested() view returns (uint256)",
+            "function reserveRatioBps() view returns (uint256)",
+            "function getIdleFunds() view returns (uint256)",
+            "function allocateIdleFunds(uint256 amount)",
+            "function divestFunds(uint256 amount)",
+            "function setInvestmentStrategy(address strategy)"
         ];
 
         let provider, signer, contract;
@@ -106,17 +137,23 @@
                 signer = await provider.getSigner();
                 contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-                const [name, balance, fee, voters] = await Promise.all([
+                const [name, balance, fee, voters, invested, ratio, idle] = await Promise.all([
                     contract.societyName(),
                     contract.treasuryBalance(),
                     contract.membershipFee(),
-                    contract.eligibleVoterCount()
+                    contract.eligibleVoterCount(),
+                    contract.totalInvested(),
+                    contract.reserveRatioBps(),
+                    contract.getIdleFunds()
                 ]);
 
                 document.getElementById("societyName").innerText = name;
                 document.getElementById("balance").innerText = ethers.formatEther(balance) + " ETH";
                 document.getElementById("fee").innerText = ethers.formatEther(fee) + " ETH";
                 document.getElementById("voters").innerText = voters.toString();
+                document.getElementById("invested").innerText = ethers.formatEther(invested) + " ETH";
+                document.getElementById("reserveRatio").innerText = (Number(ratio) / 100).toFixed(2) + "%";
+                document.getElementById("idleFunds").innerText = ethers.formatEther(idle) + " ETH";
                 
                 const addr = await signer.getAddress();
                 document.getElementById("connectBtn").innerText = addr.substring(0,6) + "..." + addr.substring(38);
@@ -180,6 +217,28 @@
                 await tx.wait();
                 location.reload();
             } catch (err) { alert("Committee credentials required for proposals."); }
+        }
+
+        async function allocateFunds() {
+            if (!contract) return;
+            const amt = document.getElementById("investAmount").value;
+            try {
+                // Ensure strategy is set for demo purposes if not already
+                // await contract.setInvestmentStrategy("0x70997970C51812dc3A010C7d01b50e0d17dc79C8"); 
+                const tx = await contract.allocateIdleFunds(ethers.parseEther(amt));
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Allocation failed: Ensure strategy is set and idle funds are available."); }
+        }
+
+        async function divestFunds() {
+            if (!contract) return;
+            const amt = document.getElementById("investAmount").value;
+            try {
+                const tx = await contract.divestFunds(ethers.parseEther(amt));
+                await tx.wait();
+                location.reload();
+            } catch (err) { alert("Divestment failed."); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
